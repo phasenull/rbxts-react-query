@@ -21,6 +21,7 @@ export function UserProfile(props: { user_name: string }) {
 		queryKey: ["userProfile", props.user_name],
 		queryFn: () => {
 			print("Fetching user profile for", props.user_name)
+			task.wait(1) // Simulate network delay
 			const player_id = Players.GetUserIdFromNameAsync(props.user_name)
 			const [headshot] = Players.GetUserThumbnailAsync(
 				player_id,
@@ -60,7 +61,10 @@ export function UserProfile(props: { user_name: string }) {
 			<imagelabel Size={new UDim2(1, 0, 1, 0)} Image={data.img}>
 				<uiaspectratioconstraint AspectRatio={1} />
 			</imagelabel>
-			<textlabel
+			<textbutton
+				Event={{
+					MouseButton1Click:refetch
+				}}
 				Text={`ID:${data.user_id}`}
 				Visible={true}
 				Position={new UDim2(0.2, 0, 0, 0)}
@@ -71,5 +75,6 @@ export function UserProfile(props: { user_name: string }) {
 		</frame>
 	)
 }
+
 
 ```
