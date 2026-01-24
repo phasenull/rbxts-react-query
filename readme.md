@@ -46,7 +46,10 @@ export function UserProfile(props: { user_name: string }) {
 		return (
 			<frame Size={new UDim2(0.2, 0, 0.2, 0)} BackgroundTransparency={1}>
 				<uiaspectratioconstraint AspectRatio={5} />
-				<textlabel
+				<textbutton
+					Event={{
+						MouseButton1Click: refetch
+					}}
 					TextColor3={Color3.fromRGB(255, 0, 0)}
 					Text={`Couldn't load user data: ${err}`}
 					Size={new UDim2(1, 0, 1, 0)}
@@ -63,7 +66,7 @@ export function UserProfile(props: { user_name: string }) {
 			</imagelabel>
 			<textbutton
 				Event={{
-					MouseButton1Click:refetch
+					MouseButton1Click: refetch
 				}}
 				Text={`ID:${data.user_id}`}
 				Visible={true}
@@ -75,6 +78,4 @@ export function UserProfile(props: { user_name: string }) {
 		</frame>
 	)
 }
-
-
 ```
