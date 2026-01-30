@@ -1,69 +1,219 @@
-import { useMemo, useState } from "@rbxts/react"
-
+import { createContext, useContext, useMemo, useState } from "@rbxts/react";
+interface queryOptions {
+	queries?: {
+		/**Number of times to retry a failed query, or set to true to retry infinitely */
+		retry?: boolean | number;
+		/**
+		 * Time in milliseconds to wait before retrying a failed query, or a function that receives the failure count and returns the time to wait
+		 */
+		retryDelay?: number | ((failureCount: number) => number);
+		/**
+		 * Time in milliseconds after data is considered stale, when a data is considered stale query will try to refetch when the component remounts or window refocuses
+		 * If the data is considered fresh, it will **not** refetch
+		 * */
+		staleTime?: number;
+		/**Global error handler for queries */
+		onError?: (error: unknown) => void;
+	};
+	mutations?: {
+		/**Global error handler for mutations */
+		onError?: (error: unknown, variables: unknown) => void;
+	};
+}
+export class QueryClient {
+	constructor(args: queryOptions) {
+		this.options = {
+			mutations: {
+				...this.options.mutations,
+			},
+			queries: {
+				...this.options.queries,
+			},
+		};
+	}
+	public readonly options: queryOptions = {
+		mutations: {
+			onError: (err: unknown, _variables: unknown) => {
+				warn(`Mutation error: ${tostring(err)}\nVariables:`, _variables);
+			},
+		},
+		queries: {
+			retry: 3,
+			retryDelay: (failureCount: number) =>
+				math.min(1000 * 2 ** failureCount, 30000),
+			staleTime: 0,
+			onError: (err: unknown) => {
+				warn(`Query error: ${tostring(err)}`);
+			},
+		},
+	};
+	public getQueryCacheFromKey<T>(key: keytype) {
+		const joined_key = buildKey(key);
+		return this.queryCache[joined_key] as
+			| { data: T; created_at: number }
+			| undefined;
+	}
+	public setQueryCacheForKey<T>(key: keytype, data: T) {
+		const joined_key = buildKey(key);
+		this.queryCache[joined_key] = {
+			data: data,
+			created_at: tick(),
+		};
+	}
+	private queryCache: Record<string, { data: unknown; created_at: number }> =
+		{};
+}
+const QueryContext = createContext<QueryClient | undefined>(undefined);
+export const QueryClientProvider = QueryContext.Provider;
+export function useQueryClient() {
+	const client = useContext(QueryContext);
+	if (!client) {
+		error(
+			"No QueryClient found in context, did you forget to wrap your app in a QueryClientProvider?",
+		);
+	}
+	return client;
+}
 export function useQuery<T>(args: {
-	queryKey: string[] | string
-	queryFn: () => Promise<T>
-	enabled?: boolean
+	queryKey: keytype;
+	queryFn: () => Promise<T>;
+	enabled?: boolean;
+	/** Time in milliseconds after data is considered stale, when a data is considered stale query will try to refetch when the component remounts or window refocuses
+	 * If the data is considered fresh, it will **not** refetch
+	 * */
+	refetchInterval?: number;
+	staleTime?: number;
 }) {
-	const query_key_joined = typeOf(args.queryKey) === "table"
-		? (args.queryKey as string[]).join("|")
-		: (args.queryKey as string)
+	const query_client = useQueryClient();
+	const query_key_joined = buildKey(args.queryKey);
 	const [state, setState] = useState<{
-		data: T | undefined
-		isLoading: boolean
-		err: unknown
+		data: T | undefined;
+		isLoading: boolean;
+		err: unknown;
 	}>({
 		data: undefined,
 		isLoading: false,
 		err: undefined,
-	})
-
-	async function fetchData() {
-		setState((prev) => ({ ...prev, isLoading: true,data:undefined,err:undefined }))
-		try {
-			const result = await args.queryFn() as T
-			if (result === undefined) {
-				error("Data returned from queryFn cannot be undefined")
+	});
+	async function fetchData(is_refetch = false) {
+		const cached_entry = query_client.getQueryCacheFromKey<T>(args.queryKey);
+		// if we have a cached entry and we're not refetching, check if it's stale
+		if (cached_entry && !is_refetch) {
+			// check if it's stale
+			if (
+				tick() - cached_entry.created_at <
+				(args.staleTime ?? query_client.options.queries?.staleTime ?? 0)
+			) {
+				const data = cached_entry.data;
+				// if the data is not undefined, return it
+				if (data !== undefined) {
+					setState({
+						data: cached_entry.data,
+						isLoading: false,
+						err: undefined,
+					});
+					return;
+				}
 			}
-			setState({ data: result, isLoading: false, err: undefined })
+		}
+		setState((prev) => ({
+			isLoading: true,
+			data: undefined,
+			err: undefined,
+		}));
+		try {
+			const result = (await args.queryFn()) as T;
+			if (result === undefined) {
+				error("Data returned from queryFn cannot be undefined");
+			}
+			query_client.setQueryCacheForKey(args.queryKey, result);
+			setState({ data: result, isLoading: false, err: undefined });
 		} catch (err) {
-			setState({ data: undefined, isLoading: false, err: err })
+			query_client.options.queries?.onError?.(err);
+			setState({ data: undefined, isLoading: false, err: err });
 		}
 	}
 	useMemo(() => {
 		if (args.enabled !== false) {
-			fetchData()
+			fetchData();
 		}
-	}, [query_key_joined, args.enabled])
+		let thread: thread | undefined = undefined;
+		if (args.refetchInterval !== undefined) {
+			thread = task.spawn(() => {
+				while (true) {
+					wait(args.refetchInterval! / 1000);
+					if (args.enabled !== false) {
+						fetchData(true);
+					}
+				}
+			});
+		}
+		return () => {
+			if (thread) {
+				task.cancel(thread);
+			}
+		};
+	}, [query_key_joined, args.enabled]);
 
-	return {...state, refetch: fetchData}
+	return { ...state, refetch: () => fetchData(true) };
 }
-
+type keytype =
+	| string
+	| number
+	| boolean
+	| keytype[]
+	| { [key: string]: keytype };
+function buildKey(args: keytype): string {
+	if (
+		typeOf(args) === "number" ||
+		typeOf(args) === "string" ||
+		typeOf(args) === "boolean"
+	) {
+		return tostring(args);
+	}
+	if (typeOf(args) === "table") {
+		const arr = [] as string[];
+		for (const [k, v] of pairs(args as { [key: string]: keytype })) {
+			arr.push(`${k}:${buildKey(v)}`);
+		}
+		return arr.join("|");
+	}
+	error(`Invalid key type: ${typeOf(args)}`);
+}
 export function useMutation<TArgs extends unknown[], TData>(args: {
-	mutationFn: (...args: TArgs) => Promise<TData>
+	mutationFn: (...args: TArgs) => Promise<TData>;
+	queryKey?: keytype;
 }) {
+	const query_client = useQueryClient();
+	const query_key_joined = buildKey(args.queryKey ?? []);
 	const [state, setState] = useState<{
-		data: TData | undefined
-		isLoading: boolean
-		err: unknown
+		data: TData | undefined;
+		isLoading: boolean;
+		err: unknown;
 	}>({
 		data: undefined,
 		isLoading: false,
 		err: undefined,
-	})
+	});
 
 	async function mutate(...mutationArgs: TArgs) {
-		setState((prev) => ({ ...prev, isLoading: true,data:undefined,err:undefined }))
+		setState((prev) => ({
+			...prev,
+			isLoading: true,
+			data: undefined,
+			err: undefined,
+		}));
 		try {
-			const result = await args.mutationFn(...mutationArgs) as TData
+			const result = (await args.mutationFn(...mutationArgs)) as TData;
 			if (result === undefined) {
-				error("Data returned from mutationFn cannot be undefined")
+				error("Data returned from mutationFn cannot be undefined");
 			}
-			setState({ data: result, isLoading: false, err: undefined })
+			setState({ data: result, isLoading: false, err: undefined });
 		} catch (err) {
-			setState({ data: undefined, isLoading: false, err: err })
+			query_client.options.mutations?.onError?.(err, mutationArgs);
+			setState({ data: undefined, isLoading: false, err: err });
 		}
 	}
 
-	return {...state, mutate}
+	return { ...state, mutate };
 }
