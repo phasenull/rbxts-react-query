@@ -1,7 +1,6 @@
 # @rbxts/react-query
 Exremely simple implementation for @tanstack/react-query for roblox-ts.
 
-Mutations, stale time, retries etc. are not supported and only simple queries are available atm.
 # installation
 ```sh
 npm i @rbxts/react-query
@@ -10,7 +9,7 @@ or
 ```sh
 bun i @rbxts/react-query
 ```
-## example usage
+## query usage
 ```typescript
 import React from "@rbxts/react"
 import { Players } from "@rbxts/services"
@@ -79,3 +78,5 @@ export function UserProfile(props: { user_name: string }) {
 	)
 }
 ```
+
+## mutations usage
