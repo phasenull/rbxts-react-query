@@ -13,11 +13,11 @@ interface queryOptions {
 		 * */
 		staleTime?: number;
 		/**Global error handler for queries */
-		onError?: (error: unknown) => void;
+		onError?: (key: string, error: unknown) => void;
 	};
 	mutations?: {
 		/**Global error handler for mutations */
-		onError?: (error: unknown, variables: unknown) => void;
+		onError?: (key: string, error: unknown, variables: unknown) => void;
 	};
 }
 export class QueryClient {
@@ -33,8 +33,11 @@ export class QueryClient {
 	}
 	public readonly options: queryOptions = {
 		mutations: {
-			onError: (err: unknown, _variables: unknown) => {
-				warn(`Mutation error: ${tostring(err)}\nVariables:`, _variables);
+			onError: (key: string, err: unknown, _variables: unknown) => {
+				warn(
+					`Mutation error for key '${key}': ${tostring(err)}\nVariables:`,
+					_variables,
+				);
 			},
 		},
 		queries: {
@@ -42,8 +45,8 @@ export class QueryClient {
 			retryDelay: (failureCount: number) =>
 				math.min(1000 * 2 ** failureCount, 30000),
 			staleTime: 0,
-			onError: (err: unknown) => {
-				warn(`Query error: ${tostring(err)}`);
+			onError: (key: string, err: unknown) => {
+				warn(`Query error for key '${key}': ${tostring(err)}`);
 			},
 		},
 	};
@@ -83,6 +86,9 @@ export function useQuery<T>(args: {
 	 * */
 	refetchInterval?: number;
 	staleTime?: number;
+	onError?: (error: unknown) => void;
+	onSuccess?: (data: T) => void;
+	onSettled?: (data: T | undefined, error: unknown | undefined) => void;
 }) {
 	const query_client = useQueryClient();
 	const query_key_joined = buildKey(args.queryKey);
@@ -127,11 +133,16 @@ export function useQuery<T>(args: {
 				error("Data returned from queryFn cannot be undefined");
 			}
 			query_client.setQueryCacheForKey(args.queryKey, result);
+			args.onSuccess?.(result);
 			setState({ data: result, isLoading: false, err: undefined });
 		} catch (err) {
-			query_client.options.queries?.onError?.(err);
+			const target_err = args.onError
+				? () => args.onError?.(err)
+				: () => query_client.options.queries?.onError?.(query_key_joined, err);
+			target_err();
 			setState({ data: undefined, isLoading: false, err: err });
 		}
+		args.onSettled?.(state.data, state.err);
 	}
 	useMemo(() => {
 		if (args.enabled !== false) {
@@ -183,6 +194,9 @@ function buildKey(args: keytype): string {
 export function useMutation<TArgs extends unknown[], TData>(args: {
 	mutationFn: (...args: TArgs) => Promise<TData>;
 	queryKey?: keytype;
+	onError?: (error: unknown) => void;
+	onSuccess?: (data: TData) => void;
+	onSettled?: (data: TData | undefined, error: unknown | undefined) => void;
 }) {
 	const query_client = useQueryClient();
 	const query_key_joined = buildKey(args.queryKey ?? []);
@@ -208,11 +222,26 @@ export function useMutation<TArgs extends unknown[], TData>(args: {
 			if (result === undefined) {
 				error("Data returned from mutationFn cannot be undefined");
 			}
+			args.onSuccess?.(result);
 			setState({ data: result, isLoading: false, err: undefined });
 		} catch (err) {
-			query_client.options.mutations?.onError?.(err, mutationArgs);
+			query_client.options.mutations?.onError?.(
+				query_key_joined,
+				err,
+				mutationArgs,
+			);
+			const target_err = args.onError
+				? () => args.onError?.(err)
+				: () =>
+						query_client.options.mutations?.onError?.(
+							query_key_joined,
+							err,
+							mutationArgs,
+						);
+			target_err();
 			setState({ data: undefined, isLoading: false, err: err });
 		}
+		args.onSettled?.(state.data, state.err);
 	}
 
 	return { ...state, mutate };
