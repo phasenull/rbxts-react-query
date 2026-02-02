@@ -95,10 +95,12 @@ export function useQuery<T>(args: {
 	const [state, setState] = useState<{
 		data: T | undefined;
 		isLoading: boolean;
+		isRefetching: boolean;
 		err: unknown;
 	}>({
 		data: undefined,
 		isLoading: false,
+		isRefetching: false,
 		err: undefined,
 	});
 	async function fetchData(is_refetch = false) {
@@ -116,6 +118,7 @@ export function useQuery<T>(args: {
 					setState({
 						data: cached_entry.data,
 						isLoading: false,
+						isRefetching: false,
 						err: undefined,
 					});
 					return;
@@ -123,8 +126,9 @@ export function useQuery<T>(args: {
 			}
 		}
 		setState((prev) => ({
-			isLoading: true,
-			data: undefined,
+			isLoading: is_refetch ? false : true,
+			isRefetching: is_refetch,
+			data: is_refetch ? prev.data : undefined,
 			err: undefined,
 		}));
 		try {
@@ -134,22 +138,36 @@ export function useQuery<T>(args: {
 			}
 			query_client.setQueryCacheForKey(args.queryKey, result);
 			args.onSuccess?.(result);
-			setState({ data: result, isLoading: false, err: undefined });
+			args.onSettled?.(result, undefined);
+			setState({
+				data: result,
+				isLoading: false,
+				isRefetching: false,
+				err: undefined,
+			});
 		} catch (err) {
 			const target_err = args.onError
 				? () => args.onError?.(err)
 				: () => query_client.options.queries?.onError?.(query_key_joined, err);
 			target_err();
-			setState({ data: undefined, isLoading: false, err: err });
+			args.onSettled?.(undefined, err);
+			setState({
+				data: undefined,
+				isLoading: false,
+				isRefetching: false,
+				err: err,
+			});
 		}
-		args.onSettled?.(state.data, state.err);
 	}
 	useMemo(() => {
 		if (args.enabled !== false) {
 			fetchData();
 		}
+	}, [query_key_joined, args.enabled]);
+
+	useMemo(() => {
 		let thread: thread | undefined = undefined;
-		if (args.refetchInterval !== undefined) {
+		if (args.refetchInterval !== undefined && args.enabled !== false) {
 			thread = task.spawn(() => {
 				while (true) {
 					wait(args.refetchInterval! / 1000);
@@ -164,7 +182,7 @@ export function useQuery<T>(args: {
 				task.cancel(thread);
 			}
 		};
-	}, [query_key_joined, args.enabled]);
+	}, [args.refetchInterval, args.enabled]);
 
 	return { ...state, refetch: () => fetchData(true) };
 }
@@ -219,9 +237,6 @@ export function useMutation<TArgs extends unknown[], TData>(args: {
 		}));
 		try {
 			const result = (await args.mutationFn(...mutationArgs)) as TData;
-			if (result === undefined) {
-				error("Data returned from mutationFn cannot be undefined");
-			}
 			args.onSuccess?.(result);
 			setState({ data: result, isLoading: false, err: undefined });
 		} catch (err) {
