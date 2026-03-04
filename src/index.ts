@@ -22,9 +22,9 @@ interface QueryCacheEntry {
 	data: unknown;
 	/** tick() timestamp when data was last successfully set; 0 if never */
 	dataUpdatedAt: number;
-	error: unknown;
-	/** tick() timestamp when error was last set; 0 if never */
-	errorUpdatedAt: number;
+	err: unknown;
+	/** tick() timestamp when err was last set; 0 if never */
+	errUpdatedAt: number;
 	status: "pending" | "error" | "success";
 	isInvalidated: boolean;
 	failureCount: number;
@@ -83,8 +83,8 @@ export interface QueryClientOptions {
 export interface QueryState<TData = unknown, TError = unknown> {
 	data: TData | undefined;
 	dataUpdatedAt: number;
-	error: TError | undefined;
-	errorUpdatedAt: number;
+	err: TError | undefined;
+	errUpdatedAt: number;
 	status: "pending" | "error" | "success";
 	isInvalidated: boolean;
 	failureCount: number;
@@ -136,7 +136,7 @@ export interface UseQueryOptions<
 
 export interface UseQueryResult<TData = unknown, TError = unknown> {
 	data: TData | undefined;
-	error: TError | undefined;
+	err: TError | undefined;
 	/** "pending" = no data yet; "error" = last fetch failed; "success" = data available */
 	status: "pending" | "error" | "success";
 	/** "fetching" = queryFn running; "paused" = paused; "idle" = not running */
@@ -164,7 +164,7 @@ export interface UseQueryResult<TData = unknown, TError = unknown> {
 	/** true if current data came from placeholderData */
 	isPlaceholderData: boolean;
 	dataUpdatedAt: number;
-	errorUpdatedAt: number;
+	errUpdatedAt: number;
 	failureCount: number;
 	failureReason: TError | undefined;
 	refetch: () => Promise<void>;
@@ -226,7 +226,7 @@ export interface UseInfiniteQueryResult<
 	TPageParam = unknown,
 > {
 	data: InfiniteData<TData, TPageParam> | undefined;
-	error: TError | undefined;
+	err: TError | undefined;
 	status: "pending" | "error" | "success";
 	fetchStatus: "fetching" | "paused" | "idle";
 	isPending: boolean;
@@ -240,7 +240,7 @@ export interface UseInfiniteQueryResult<
 	isRefetchError: boolean;
 	isStale: boolean;
 	dataUpdatedAt: number;
-	errorUpdatedAt: number;
+	errUpdatedAt: number;
 	failureCount: number;
 	failureReason: TError | undefined;
 	hasNextPage: boolean;
@@ -319,7 +319,7 @@ export interface UseMutationResult<
 	TContext = unknown,
 > {
 	data: TData | undefined;
-	error: TError | undefined;
+	err: TError | undefined;
 	status: "idle" | "pending" | "success" | "error";
 	isIdle: boolean;
 	isPending: boolean;
@@ -471,8 +471,8 @@ export class QueryClient {
 			this.queryCache[joinedKey] = {
 				data: newData,
 				dataUpdatedAt: tick(),
-				error: undefined,
-				errorUpdatedAt: existing?.errorUpdatedAt ?? 0,
+				err: undefined,
+				errUpdatedAt: existing?.errUpdatedAt ?? 0,
 				status: "success",
 				isInvalidated: false,
 				failureCount: 0,
@@ -492,8 +492,8 @@ export class QueryClient {
 		return {
 			data: entry.data as TData | undefined,
 			dataUpdatedAt: entry.dataUpdatedAt,
-			error: entry.error as TError | undefined,
-			errorUpdatedAt: entry.errorUpdatedAt,
+			err: entry.err as TError | undefined,
+			errUpdatedAt: entry.errUpdatedAt,
 			status: entry.status,
 			isInvalidated: entry.isInvalidated,
 			failureCount: entry.failureCount,
@@ -628,8 +628,8 @@ export class QueryClient {
 				this.queryCache[joinedKey] = {
 					data: result,
 					dataUpdatedAt: tick(),
-					error: undefined,
-					errorUpdatedAt: entry?.errorUpdatedAt ?? 0,
+					err: undefined,
+					errUpdatedAt: entry?.errUpdatedAt ?? 0,
 					status: "success",
 					isInvalidated: false,
 					failureCount: 0,
@@ -643,8 +643,8 @@ export class QueryClient {
 					this.queryCache[joinedKey] = {
 						data: entry?.data,
 						dataUpdatedAt: entry?.dataUpdatedAt ?? 0,
-						error: err,
-						errorUpdatedAt: tick(),
+						err: err,
+						errUpdatedAt: tick(),
 						status: "error",
 						isInvalidated: false,
 						failureCount,
@@ -717,8 +717,8 @@ export class QueryClient {
 			...(this.queryCache[joinedKey] ?? {
 				data: undefined,
 				dataUpdatedAt: 0,
-				error: undefined,
-				errorUpdatedAt: 0,
+				err: undefined,
+				errUpdatedAt: 0,
 				status: "pending" as const,
 				isInvalidated: false,
 				failureCount: 0,
@@ -755,11 +755,11 @@ export function useQueryClient(): QueryClient {
 
 interface UseQueryInternalState<TData, TError> {
 	data: TData | undefined;
-	error: TError | undefined;
+	err: TError | undefined;
 	status: "pending" | "error" | "success";
 	fetchStatus: "fetching" | "paused" | "idle";
 	dataUpdatedAt: number;
-	errorUpdatedAt: number;
+	errUpdatedAt: number;
 	failureCount: number;
 	failureReason: TError | undefined;
 	isPlaceholderData: boolean;
@@ -810,11 +810,11 @@ export function useQuery<
 				data: (options.select
 					? options.select(entry.data as TQueryFnData)
 					: entry.data) as TData | undefined,
-				error: undefined,
+				err: undefined,
 				status: "success",
 				fetchStatus: "idle",
 				dataUpdatedAt: entry.dataUpdatedAt,
-				errorUpdatedAt: entry.errorUpdatedAt,
+				errUpdatedAt: entry.errUpdatedAt,
 				failureCount: 0,
 				failureReason: undefined,
 				isPlaceholderData: false,
@@ -831,8 +831,8 @@ export function useQuery<
 			client._setCacheEntry(joinedKey, {
 				data: initialDataValue,
 				dataUpdatedAt: updatedAt,
-				error: undefined,
-				errorUpdatedAt: 0,
+				err: undefined,
+				errUpdatedAt: 0,
 				status: "success",
 				isInvalidated: tick() - updatedAt >= resolvedStaleTime,
 				failureCount: 0,
@@ -840,11 +840,11 @@ export function useQuery<
 			});
 			return {
 				data: initialDataValue,
-				error: undefined,
+				err: undefined,
 				status: "success",
 				fetchStatus: "idle",
 				dataUpdatedAt: updatedAt,
-				errorUpdatedAt: 0,
+				errUpdatedAt: 0,
 				failureCount: 0,
 				failureReason: undefined,
 				isPlaceholderData: false,
@@ -864,11 +864,11 @@ export function useQuery<
 			if (ph !== undefined) {
 				return {
 					data: ph,
-					error: undefined,
+					err: undefined,
 					status: "pending",
 					fetchStatus: "idle",
 					dataUpdatedAt: 0,
-					errorUpdatedAt: 0,
+					errUpdatedAt: 0,
 					failureCount: 0,
 					failureReason: undefined,
 					isPlaceholderData: true,
@@ -878,11 +878,11 @@ export function useQuery<
 
 		return {
 			data: undefined,
-			error: undefined,
+			err: undefined,
 			status: "pending",
 			fetchStatus: "idle",
 			dataUpdatedAt: 0,
-			errorUpdatedAt: 0,
+			errUpdatedAt: 0,
 			failureCount: 0,
 			failureReason: undefined,
 			isPlaceholderData: false,
@@ -916,11 +916,11 @@ export function useQuery<
 				: currentEntry.data) as TData | undefined;
 			setState({
 				data: cachedData,
-				error: undefined,
+				err: undefined,
 				status: "success",
 				fetchStatus: "idle",
 				dataUpdatedAt: currentEntry.dataUpdatedAt,
-				errorUpdatedAt: currentEntry.errorUpdatedAt,
+				errUpdatedAt: currentEntry.errUpdatedAt,
 				failureCount: 0,
 				failureReason: undefined,
 				isPlaceholderData: false,
@@ -951,8 +951,8 @@ export function useQuery<
 				client._setCacheEntry(joinedKey, {
 					data: finalData,
 					dataUpdatedAt: now,
-					error: undefined,
-					errorUpdatedAt: currentEntry?.errorUpdatedAt ?? 0,
+					err: undefined,
+					errUpdatedAt: currentEntry?.errUpdatedAt ?? 0,
 					status: "success",
 					isInvalidated: false,
 					failureCount: 0,
@@ -961,11 +961,11 @@ export function useQuery<
 
 				setState((prev) => ({
 					data: finalData,
-					error: undefined,
+					err: undefined,
 					status: "success" as const,
 					fetchStatus: "idle" as const,
 					dataUpdatedAt: now,
-					errorUpdatedAt: prev.errorUpdatedAt,
+					errUpdatedAt: prev.errUpdatedAt,
 					failureCount: 0,
 					failureReason: undefined,
 					isPlaceholderData: false,
@@ -979,8 +979,8 @@ export function useQuery<
 				if (!computeShouldRetry(resolvedRetry as boolean | number | ((failureCount: number, err: unknown) => boolean) | undefined, failureCount, err)) {
 					const now = tick();
 					client._setCacheEntry(joinedKey, {
-						error: err,
-						errorUpdatedAt: now,
+						err: err,
+						errUpdatedAt: now,
 						status: "error",
 						isInvalidated: false,
 						failureCount,
@@ -989,8 +989,8 @@ export function useQuery<
 
 					setState((prev) => ({
 						...prev,
-						error: err as TError,
-						errorUpdatedAt: now,
+						err: err as TError,
+						errUpdatedAt: now,
 						status: "error" as const,
 						fetchStatus: "idle" as const,
 						failureCount,
@@ -1046,11 +1046,11 @@ export function useQuery<
 				: entry!.data) as TData | undefined;
 			setState({
 				data: cachedData,
-				error: undefined,
+				err: undefined,
 				status: "success",
 				fetchStatus: "idle",
 				dataUpdatedAt: entry!.dataUpdatedAt,
-				errorUpdatedAt: entry!.errorUpdatedAt,
+				errUpdatedAt: entry!.errUpdatedAt,
 				failureCount: 0,
 				failureReason: undefined,
 				isPlaceholderData: false,
@@ -1114,7 +1114,7 @@ export function useQuery<
 
 	return {
 		data: state.data,
-		error: state.error,
+		err: state.err,
 		status: state.status,
 		fetchStatus: state.fetchStatus,
 		isPending,
@@ -1129,7 +1129,7 @@ export function useQuery<
 		isStale,
 		isPlaceholderData: state.isPlaceholderData,
 		dataUpdatedAt: state.dataUpdatedAt,
-		errorUpdatedAt: state.errorUpdatedAt,
+		errUpdatedAt: state.errUpdatedAt,
 		failureCount: state.failureCount,
 		failureReason: state.failureReason,
 		refetch: () => runQuery(true),
@@ -1145,9 +1145,9 @@ interface InfiniteQueryInternalState<TQueryFnData, TError, TPageParam> {
 	pageParams: TPageParam[];
 	status: "pending" | "error" | "success";
 	fetchStatus: "fetching" | "paused" | "idle";
-	error: TError | undefined;
+	err: TError | undefined;
 	dataUpdatedAt: number;
-	errorUpdatedAt: number;
+	errUpdatedAt: number;
 	failureCount: number;
 	failureReason: TError | undefined;
 	isFetchingNextPage: boolean;
@@ -1204,9 +1204,9 @@ export function useInfiniteQuery<
 				pageParams: cached.pageParams,
 				status: "success",
 				fetchStatus: "idle",
-				error: undefined,
+				err: undefined,
 				dataUpdatedAt: entry.dataUpdatedAt,
-				errorUpdatedAt: entry.errorUpdatedAt,
+				errUpdatedAt: entry.errUpdatedAt,
 				failureCount: 0,
 				failureReason: undefined,
 				isFetchingNextPage: false,
@@ -1218,9 +1218,9 @@ export function useInfiniteQuery<
 			pageParams: [options.initialPageParam],
 			status: "pending",
 			fetchStatus: "idle",
-			error: undefined,
+			err: undefined,
 			dataUpdatedAt: 0,
-			errorUpdatedAt: 0,
+			errUpdatedAt: 0,
 			failureCount: 0,
 			failureReason: undefined,
 			isFetchingNextPage: false,
@@ -1254,9 +1254,9 @@ export function useInfiniteQuery<
 				pageParams: cached.pageParams,
 				status: "success" as const,
 				fetchStatus: "idle" as const,
-				error: undefined,
+				err: undefined,
 				dataUpdatedAt: entry.dataUpdatedAt,
-				errorUpdatedAt: entry.errorUpdatedAt,
+				errUpdatedAt: entry.errUpdatedAt,
 				failureCount: 0,
 				failureReason: undefined,
 			}));
@@ -1290,8 +1290,8 @@ export function useInfiniteQuery<
 				client._setCacheEntry(joinedKey, {
 					data: infiniteData,
 					dataUpdatedAt: now,
-					error: undefined,
-					errorUpdatedAt: 0,
+					err: undefined,
+					errUpdatedAt: 0,
 					status: "success",
 					isInvalidated: false,
 					failureCount: 0,
@@ -1304,7 +1304,7 @@ export function useInfiniteQuery<
 					pageParams,
 					status: "success" as const,
 					fetchStatus: "idle" as const,
-					error: undefined,
+					err: undefined,
 					dataUpdatedAt: now,
 					failureCount: 0,
 					failureReason: undefined,
@@ -1318,8 +1318,8 @@ export function useInfiniteQuery<
 				if (!computeShouldRetry(resolvedRetry as boolean | number | ((failureCount: number, err: unknown) => boolean) | undefined, failureCount, err)) {
 					const now = tick();
 					client._setCacheEntry(joinedKey, {
-						error: err,
-						errorUpdatedAt: now,
+						err: err,
+						errUpdatedAt: now,
 						status: "error",
 						isInvalidated: false,
 						failureCount,
@@ -1327,8 +1327,8 @@ export function useInfiniteQuery<
 					});
 					setState((prev) => ({
 						...prev,
-						error: err as TError,
-						errorUpdatedAt: now,
+						err: err as TError,
+						errUpdatedAt: now,
 						status: "error" as const,
 						fetchStatus: "idle" as const,
 						failureCount,
@@ -1606,7 +1606,7 @@ export function useInfiniteQuery<
 
 	return {
 		data,
-		error: state.error,
+		err: state.err,
 		status: state.status,
 		fetchStatus: state.fetchStatus,
 		isPending,
@@ -1620,7 +1620,7 @@ export function useInfiniteQuery<
 		isRefetchError,
 		isStale,
 		dataUpdatedAt: state.dataUpdatedAt,
-		errorUpdatedAt: state.errorUpdatedAt,
+		errUpdatedAt: state.errUpdatedAt,
 		failureCount: state.failureCount,
 		failureReason: state.failureReason,
 		hasNextPage,
@@ -1639,7 +1639,7 @@ export function useInfiniteQuery<
 
 interface UseMutationInternalState<TData, TError, TVariables, TContext> {
 	data: TData | undefined;
-	error: TError | undefined;
+	err: TError | undefined;
 	status: "idle" | "pending" | "success" | "error";
 	variables: TVariables | undefined;
 	context: TContext | undefined;
@@ -1679,7 +1679,7 @@ export function useMutation<
 		UseMutationInternalState<TData, TError, TVariables, TContext>
 	>({
 		data: undefined,
-		error: undefined,
+		err: undefined,
 		status: "idle",
 		variables: undefined,
 		context: undefined,
@@ -1704,7 +1704,7 @@ export function useMutation<
 
 		setState({
 			data: undefined,
-			error: undefined,
+			err: undefined,
 			status: "pending",
 			variables,
 			context: undefined,
@@ -1732,7 +1732,7 @@ export function useMutation<
 				setState((prev) => ({
 					...prev,
 					status: "error",
-					error: mutateErr as TError,
+					err: mutateErr as TError,
 				}));
 				throw mutateErr;
 			}
@@ -1750,7 +1750,7 @@ export function useMutation<
 
 				setState({
 					data: finalData,
-					error: undefined,
+					err: undefined,
 					status: "success",
 					variables,
 					context: finalContext,
@@ -1787,7 +1787,7 @@ export function useMutation<
 
 					setState({
 						data: undefined,
-						error: finalErr,
+						err: finalErr,
 						status: "error",
 						variables,
 						context: finalContext,
@@ -1857,7 +1857,7 @@ export function useMutation<
 	const reset = (): void => {
 		setState({
 			data: undefined,
-			error: undefined,
+			err: undefined,
 			status: "idle",
 			variables: undefined,
 			context: undefined,
@@ -1874,7 +1874,7 @@ export function useMutation<
 
 	return {
 		data: state.data,
-		error: state.error,
+		err: state.err,
 		status: state.status,
 		isIdle,
 		isPending,
