@@ -1,6 +1,6 @@
 {
   "name": "@rbxts/react-query",
-  "version": "1.0.2-beta.2",
+  "version": "2.0.0-beta",
   "main": "out/init.lua",
   "scripts": {
     "build": "rbxtsc",
